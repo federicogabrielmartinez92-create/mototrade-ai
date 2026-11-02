@@ -57,13 +57,18 @@ def test_outbound_idempotent_and_requires_approval(session):
     assert outbound.execute_pending(session, n)["sent"] == 0  # no se reenvía
 
 
+def _tg(session, text, key):
+    """Encola una copia a Telegram directamente (notify_operator solo lo hace si Telegram está configurado)."""
+    return outbound.enqueue(session, kind="notify_operator", channel="telegram", payload={"text": text}, idempotency_key=f"notify:{key}")
+
+
 def test_outbound_blocked_by_kill_switch_and_unknown_channel(session):
     n = ConsoleNotifier()
-    outbound.notify_operator(session, "aviso", key="a1")
+    _tg(session, "aviso", "a1")
     wa = outbound.enqueue(session, kind="send_message", channel="whatsapp", payload={"text": "y"}, idempotency_key="wa1")
     stats = outbound.execute_pending(session, n)
     assert stats["sent"] == 1 and stats["blocked"] == 1 and wa.status == "blocked" and "whatsapp" in wa.last_error
-    outbound.notify_operator(session, "aviso2", key="a2")
+    _tg(session, "aviso2", "a2")
     kill_switch.engage(session, by="admin")
     stats = outbound.execute_pending(session, n)
     assert stats["blocked"] == 1 and stats["sent"] == 0
@@ -80,7 +85,7 @@ def test_outbound_retries_and_gives_up(session):
             return NotifyResult(ok=False, error="down")
 
     f = Flaky()
-    row = outbound.notify_operator(session, "x", key="r1")
+    row = _tg(session, "x", "r1")
     for _ in range(outbound.MAX_ATTEMPTS + 2):
         outbound.execute_pending(session, f)
     assert row.attempts == outbound.MAX_ATTEMPTS and row.status == "failed" and f.calls == outbound.MAX_ATTEMPTS
@@ -105,12 +110,16 @@ def test_worker_runs_all_jobs_and_records(session, rules):
     assert all(r.status == "ok" for r in runs if r.job_name != "telegram_inbox"), [(r.job_name, r.error) for r in runs]
     radar = by["radar_scan"]
     assert radar.stats["new_opportunities"] == 1 and radar.stats["extraordinary_new"] == 1
-    assert any("EXTRAORDINARIA" in t and "score" in t for t in n.sent)  # se despachó la notificación
+    from mototrade.core import notifications as notif
+
+    alerts = notif.list_notifications(session, unread_only=True)
+    assert any("EXTRAORDINARIA" in a.title and "score" in a.title for a in alerts)  # quedó en el centro de notificaciones
+    assert n.sent == []  # sin Telegram configurado no sale nada
     # segunda pasada: idempotente, sin nuevas oportunidades ni reenvíos
     n2 = ConsoleNotifier()
     runs2 = run_all(session, n2)
     assert next(r for r in runs2 if r.job_name == "radar_scan").stats["new_opportunities"] == 0
-    assert n2.sent == []
+    assert n2.sent == [] and len(notif.list_notifications(session)) == len(alerts)
     assert session.query(JobRun).count() == 2 * len(JOBS)
 
 

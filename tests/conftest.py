@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 os.environ.setdefault("MOTOTRADE_ENV", "test")
 os.environ.setdefault("MOTOTRADE_SECRET_KEY", "test-secret-key-not-for-production-0123456789")
-os.environ.setdefault("MOTOTRADE_API_KEY", "test-api-key")
+os.environ.setdefault("MOTOTRADE_API_KEY", "test-api-key-0123456789")
 os.environ.setdefault("MOTOTRADE_LLM_PROVIDER", "fake")
 os.environ.setdefault("MOTOTRADE_TELEGRAM_BOT_TOKEN", "")
 os.environ.setdefault("MOTOTRADE_TELEGRAM_CHAT_ID", "")

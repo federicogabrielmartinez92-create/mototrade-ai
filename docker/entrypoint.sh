@@ -24,7 +24,7 @@ EOF
 case "${1:-api}" in
   api)
     wait_for_db
-    alembic upgrade head
+    python -m mototrade.cli migrate
     python -m mototrade.cli bootstrap
     exec uvicorn mototrade.api.app:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips='*'
     ;;

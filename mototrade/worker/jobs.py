@@ -53,7 +53,7 @@ def job_expire_approvals(session: Session, notifier: Notifier) -> dict:
 def job_telegram_inbox(session: Session, notifier: Notifier) -> dict:
     s = get_settings()
     if not s.telegram_enabled:
-        raise JobSkipped("Telegram no configurado (sin token/chat_id)")
+        raise JobSkipped("Telegram no configurado (opcional): la carga de anuncios se hace desde la app")
     from mototrade.integrations.telegram_inbox import TelegramInbox
 
     _, _, rules, _ = _ctx(session)
@@ -80,10 +80,11 @@ def job_radar_scan(session: Session, notifier: Notifier) -> dict:
         extraordinary += d.opportunity_class == "extraordinary"
         disc = f"{float(d.discount_pct):.0%} bajo comparables" if d.discount_pct is not None else "sin referencia"
         outbound.notify_operator(
-            session, f"🏍️ {tag} #{d.id} (score {d.opportunity_score}): {l.make} {l.model} {l.year or ''} "
-                     f"{fmt_ars(l.asking_price)} · {disc} · {l.location or 's/ubicación'} · modo {d.opportunity_mode} · "
+            session, f"🏍️ {tag} #{d.id} (score {d.opportunity_score}): {l.make} {l.model} {l.year or ''} {fmt_ars(l.asking_price)}\n"
+                     f"{disc} · {l.location or 's/ubicación'} · modo {d.opportunity_mode} · "
                      f"máx. compra {fmt_ars(d.score_breakdown.get('max_purchase') or 0)} · riesgo {d.analysis.get('risk_level')}",
-            key=f"deal:{d.id}:new")
+            key=f"deal:{d.id}:new", level="alert" if d.opportunity_class == "extraordinary" else "info",
+            category="opportunity", entity_type="deal", entity_id=d.id)
     return {"scored": len(deals), "new_opportunities": len(new), "extraordinary_new": extraordinary,
             "capital": gate.position.as_dict()}
 
@@ -98,9 +99,9 @@ def job_pricing_review(session: Session, notifier: Notifier) -> dict:
         rec = svc.recommend_and_request(item)
         if rec:
             n += 1
-            outbound.notify_operator(session, f"💲 Recomendación de precio para {item.make} {item.model}: "
+            outbound.notify_operator(session, f"💲 Recomendación de precio para {item.make} {item.model}\n"
                                               f"{fmt_ars(rec.current_price)} → {fmt_ars(rec.recommended_price)} ({rec.reason})",
-                                     key=f"pricing:{rec.id}")
+                                     key=f"pricing:{rec.id}", category="pricing", entity_type="inventory_item", entity_id=item.id)
     return {"recommendations": n}
 
 
@@ -109,7 +110,8 @@ def job_stale_followups(session: Session, notifier: Notifier) -> dict:
     stale = crm.stale_conversations(days=3)
     for conv in stale:
         outbound.notify_operator(session, f"⏰ Conversación #{conv.id} ({conv.direction}) sin movimiento hace 3+ días.",
-                                 key=f"stale:{conv.id}:{datetime.now(timezone.utc).date()}")
+                                 key=f"stale:{conv.id}:{datetime.now(timezone.utc).date()}", category="crm",
+                                 entity_type="conversation", entity_id=conv.id)
     return {"stale": len(stale)}
 
 

@@ -1,0 +1,58 @@
+# Preparación de la base de datos (MANUAL). Ejecutar desde Actions → setup-database → Run workflow.
+# 1) Aplica las migraciones Alembic (crea/actualiza las tablas en Supabase).
+# 2) Opcionalmente crea el usuario admin inicial (MOTOTRADE_ADMIN_PASSWORD) y el capital inicial.
+# No inicia ninguna tarea comercial. Idempotente: se puede volver a correr.
+# Secretos necesarios: MOTOTRADE_DATABASE_URL (pooler de Supabase, modo session), MOTOTRADE_SECRET_KEY,
+#                      MOTOTRADE_ADMIN_PASSWORD (solo si create_admin=true).
+name: setup-database
+
+on:
+  workflow_dispatch:
+    inputs:
+      create_admin:
+        description: "Crear el usuario admin inicial a partir de MOTOTRADE_ADMIN_PASSWORD (solo si no hay usuarios)"
+        type: boolean
+        default: true
+      initial_capital:
+        description: "Registrar el capital inicial del Centro de Control si el libro de caja está vacío"
+        type: boolean
+        default: true
+
+concurrency:
+  group: mototrade-db
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      MOTOTRADE_ENV: production
+      MOTOTRADE_LOG_LEVEL: WARNING
+      MOTOTRADE_DATABASE_URL: ${{ secrets.MOTOTRADE_DATABASE_URL }}
+      MOTOTRADE_SECRET_KEY: ${{ secrets.MOTOTRADE_SECRET_KEY }}
+      MOTOTRADE_ADMIN_USERNAME: ${{ secrets.MOTOTRADE_ADMIN_USERNAME || 'admin' }}
+      MOTOTRADE_ADMIN_PASSWORD: ${{ secrets.MOTOTRADE_ADMIN_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -q -r requirements.txt && pip install -q -e .
+      - name: Verificar que los secretos obligatorios existan (sin mostrarlos)
+        run: |
+          test -n "$MOTOTRADE_DATABASE_URL" || { echo "::error::Falta el secreto MOTOTRADE_DATABASE_URL"; exit 1; }
+          test -n "$MOTOTRADE_SECRET_KEY" || { echo "::error::Falta el secreto MOTOTRADE_SECRET_KEY"; exit 1; }
+          echo "Secretos presentes."
+      - name: Migraciones (alembic upgrade head)
+        run: python -m mototrade.cli migrate
+      - name: Admin inicial y capital
+        if: ${{ inputs.create_admin || inputs.initial_capital }}
+        run: |
+          if [ "${{ inputs.create_admin }}" = "true" ] && [ -z "$MOTOTRADE_ADMIN_PASSWORD" ]; then
+            echo "::error::create_admin=true pero falta el secreto MOTOTRADE_ADMIN_PASSWORD"; exit 1; fi
+          if [ "${{ inputs.create_admin }}" != "true" ]; then unset MOTOTRADE_ADMIN_PASSWORD; fi
+          if [ "${{ inputs.initial_capital }}" = "true" ]; then python -m mototrade.cli bootstrap; else python -m mototrade.cli bootstrap --no-capital; fi
+      - name: Estado final
+        run: python -m mototrade.cli check

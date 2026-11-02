@@ -41,7 +41,9 @@ Streamlit 0 + Supabase 0 + GitHub Actions 0 (dentro de cuota) + Telegram 0 + Ant
 volumen (≈1.000 mensajes/mes con Haiku 5.5 ≈ US$0,35; con Sonnet 5.5 ≈ US$7; 60 inspecciones visuales de 6 fotos
 con Haiku ≈ US$0,10). Total realista: **US$ 0–10/mes**.
 
-## Pasos de puesta en marcha (≈ 45 min)
+## Pasos de puesta en marcha
+
+**Procedimiento exacto y actualizado (sin Telegram): ver `docs/DESPLIEGUE_GITHUB.md`.** Resumen histórico:
 
 1. **Supabase**: crear proyecto Free (región más cercana: `sa-east-1` São Paulo). En *Project Settings → Database*
    copiar la connection string del **Session pooler** (no la directa). Crear bucket privado `fotos` en Storage.

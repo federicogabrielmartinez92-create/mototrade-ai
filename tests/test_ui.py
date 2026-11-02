@@ -13,7 +13,7 @@ from mototrade.modules.valuation import ValuationService
 from mototrade.security import create_user
 
 APP = str(Path(__file__).resolve().parents[1] / "ui" / "app.py")
-VIEWS = ["views/dashboard.py", "views/centro_control.py", "views/aprobaciones.py", "views/radar.py", "views/tasaciones.py", "views/inspeccion.py",
+VIEWS = ["views/dashboard.py", "views/notificaciones.py", "views/centro_control.py", "views/aprobaciones.py", "views/radar.py", "views/tasaciones.py", "views/inspeccion.py",
          "views/repuestos.py", "views/negociaciones_compra.py", "views/inventario.py", "views/publicaciones.py",
          "views/negociaciones_venta.py", "views/crm.py", "views/finanzas.py", "views/analitica.py", "views/configuracion.py"]
 

@@ -7,7 +7,7 @@ from mototrade.core.money import D
 from mototrade.modules.valuation import ValuationService
 from mototrade.security import create_user
 
-API_KEY = {"X-API-Key": "test-api-key"}
+API_KEY = {"X-API-Key": "test-api-key-0123456789"}
 
 
 @pytest.fixture()

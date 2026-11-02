@@ -162,6 +162,25 @@ class AIUsage(Base):
     __table_args__ = (Index("ix_ai_usage_time", "occurred_at"),)
 
 
+class Notification(Base):
+    """Centro de notificaciones persistente dentro de la app (canal principal; Telegram es opcional)."""
+
+    __tablename__ = "notifications"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    level: Mapped[str] = mapped_column(String(8), nullable=False, default="info")  # info|warning|alert
+    category: Mapped[str] = mapped_column(String(32), nullable=False, default="general")  # opportunity|approval|pricing|system|...
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    entity_type: Mapped[str | None] = mapped_column(String(32))
+    entity_id: Mapped[str | None] = mapped_column(String(64))
+    dedupe_key: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    read_by: Mapped[str | None] = mapped_column(String(64))
+
+    __table_args__ = (Index("ix_notifications_unread", "read_at", "created_at"),)
+
+
 class JobRun(Base):
     __tablename__ = "job_runs"
     id: Mapped[int] = mapped_column(primary_key=True)

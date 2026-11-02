@@ -5,14 +5,16 @@ import argparse
 import json
 import logging
 import sys
+from pathlib import Path
 
 from mototrade.config import get_rules, get_settings
 from mototrade.db import init_db, session_scope
 
 
 def cmd_init_db(_):
+    """Solo desarrollo/tests (create_all). En producción usar 'migrate'."""
     init_db()
-    print("Tablas creadas/verificadas en", get_settings().database_url.split("@")[-1])
+    print("Tablas creadas/verificadas en", _redact(get_settings().database_url))
 
 
 def cmd_create_admin(args):
@@ -23,17 +25,62 @@ def cmd_create_admin(args):
         print(f"Usuario admin '{u.username}' creado.")
 
 
-def cmd_bootstrap(_):
-    """Crea tablas, admin inicial (desde .env) y capital inicial (desde reglas)."""
+def _alembic_config():
+    from alembic.config import Config
+
+    root = Path(__file__).resolve().parents[1]
+    cfg = Config(str(root / "alembic.ini"))
+    cfg.set_main_option("script_location", str(root / "alembic"))
+    return cfg
+
+
+def _redact(url: str) -> str:
+    """Nunca imprimir credenciales: deja solo host/base."""
+    return url.split("@")[-1] if "@" in url else url.split("://")[0] + "://…"
+
+
+def cmd_migrate(_):
+    """Aplica las migraciones Alembic (alembic upgrade head). No inicia tareas comerciales."""
+    from alembic import command
+
+    print("Base:", _redact(get_settings().database_url))
+    command.upgrade(_alembic_config(), "head")
+    cmd_db_status(_)
+
+
+def cmd_db_status(_):
+    """Compara la revisión aplicada con la última del repo. Sale con 1 si faltan migraciones."""
+    from alembic.runtime.migration import MigrationContext
+    from alembic.script import ScriptDirectory
+
+    from mototrade.db import get_engine
+
+    head = ScriptDirectory.from_config(_alembic_config()).get_current_head()
+    with get_engine().connect() as conn:
+        current = MigrationContext.configure(conn).get_current_revision()
+    print(f"Migraciones: aplicada={current or 'ninguna'} · última={head}")
+    if current != head:
+        print("FALTAN MIGRACIONES: ejecutá 'mototrade migrate' (workflow setup-database).")
+        sys.exit(1)
+    print("Esquema al día.")
+
+
+def cmd_bootstrap(args):
+    """Crea el admin inicial (desde MOTOTRADE_ADMIN_PASSWORD) y el capital inicial. Requiere migraciones aplicadas.
+    Idempotente: no toca nada si ya existe. Nunca imprime la contraseña."""
+    from mototrade.control import ControlCenter
     from mototrade.modules.finance import FinanceService
     from mototrade.security import ensure_admin_from_settings
 
-    init_db()
     with session_scope() as s:
         u = ensure_admin_from_settings(s)
-        cap = FinanceService(s, get_rules()).ensure_initial_capital()
-    print("Admin:", "creado" if u else "ya existía / sin password en .env")
-    print("Capital inicial:", "registrado" if cap else "ya existía")
+        cc = ControlCenter(s)
+        cc.ensure_defaults()
+        cap = None if getattr(args, "no_capital", False) else FinanceService(s, cc.effective_rules()).ensure_initial_capital()
+    has_pwd = bool(get_settings().admin_password.get_secret_value())
+    print("Admin:", "creado" if u else ("ya existía un usuario" if has_pwd else "no creado: falta MOTOTRADE_ADMIN_PASSWORD"))
+    print("Centro de Control: valores por defecto verificados")
+    print("Capital inicial:", "registrado" if cap else "ya existía / omitido")
 
 
 def cmd_worker(args):
@@ -51,7 +98,7 @@ def cmd_check(_):
 
     s = get_settings()
     rules = get_rules()
-    print("Entorno:", s.env)
+    print("Entorno:", s.env, "· base:", _redact(s.database_url))
     print("Reglas:", rules.source_path, "hash", rules.rules_hash[:12], "versión", rules.version)
     print("Integraciones:")
     for k, v in s.integration_status().items():
@@ -94,7 +141,9 @@ def main(argv=None):
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("init-db").set_defaults(fn=cmd_init_db)
     a = sub.add_parser("create-admin"); a.add_argument("username"); a.add_argument("password"); a.set_defaults(fn=cmd_create_admin)
-    sub.add_parser("bootstrap").set_defaults(fn=cmd_bootstrap)
+    b = sub.add_parser("bootstrap"); b.add_argument("--no-capital", action="store_true"); b.set_defaults(fn=cmd_bootstrap)
+    sub.add_parser("migrate").set_defaults(fn=cmd_migrate)
+    sub.add_parser("db-status").set_defaults(fn=cmd_db_status)
     w = sub.add_parser("worker"); w.add_argument("--once", action="store_true"); w.add_argument("--interval", type=int); w.set_defaults(fn=cmd_worker)
     sub.add_parser("check").set_defaults(fn=cmd_check)
     sub.add_parser("verify-audit").set_defaults(fn=cmd_verify_audit)

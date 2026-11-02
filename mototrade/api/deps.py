@@ -33,7 +33,7 @@ def get_business_rules(db: Session = Depends(get_db)) -> BusinessRules:
 
 def current_principal(x_api_key: str | None = Header(default=None), authorization: str | None = Header(default=None)) -> Principal:
     settings = get_settings()
-    if x_api_key and hmac.compare_digest(x_api_key, settings.api_key.get_secret_value()):
+    if x_api_key and settings.api_key_enabled and hmac.compare_digest(x_api_key, settings.api_key.get_secret_value()):
         return Principal(username="api", role="admin")
     if authorization and authorization.lower().startswith("bearer "):
         p = verify_token(authorization.split(" ", 1)[1].strip())

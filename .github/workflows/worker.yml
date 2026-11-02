@@ -1,9 +1,6 @@
-# Worker programado en GitHub Actions (nube gratuita, sin VPS).
-# - Cada 30 min en repo privado entra en la cuota gratuita (~2.000 min/mes si cada corrida dura ≤ 1 min).
-#   En repo público podés usar "*/15 * * * *" (minutos ilimitados).
-# - Cada corrida: lee Telegram (/moto), analiza anuncios, revisa precios, despacha notificaciones.
-#   Eso también mantiene activo el proyecto de Supabase (se pausa a los 7 días sin consultas).
-# - workflow_dispatch permite correrlo a mano desde la pestaña Actions.
+# Worker programado (nube gratuita, sin VPS). NO aplica migraciones: si faltan, se detiene con un mensaje claro
+# (ejecutar antes el workflow setup-database). Telegram es opcional: sin token, las alertas quedan en la app.
+# Cada 30 min en repo privado entra en la cuota gratuita; en repo público puede ser "*/15 * * * *".
 name: worker
 
 on:
@@ -21,9 +18,10 @@ jobs:
     timeout-minutes: 10
     env:
       MOTOTRADE_ENV: production
-      MOTOTRADE_DATABASE_URL: ${{ secrets.MOTOTRADE_DATABASE_URL }}   # pooler de Supabase en modo session (IPv4)
+      MOTOTRADE_LOG_LEVEL: WARNING
+      MOTOTRADE_DATABASE_URL: ${{ secrets.MOTOTRADE_DATABASE_URL }}
       MOTOTRADE_SECRET_KEY: ${{ secrets.MOTOTRADE_SECRET_KEY }}
-      MOTOTRADE_API_KEY: ${{ secrets.MOTOTRADE_API_KEY }}
+      # Opcionales (vacíos = función desactivada, el worker corre igual)
       MOTOTRADE_TELEGRAM_BOT_TOKEN: ${{ secrets.MOTOTRADE_TELEGRAM_BOT_TOKEN }}
       MOTOTRADE_TELEGRAM_CHAT_ID: ${{ secrets.MOTOTRADE_TELEGRAM_CHAT_ID }}
       MOTOTRADE_ANTHROPIC_API_KEY: ${{ secrets.MOTOTRADE_ANTHROPIC_API_KEY }}
@@ -31,7 +29,7 @@ jobs:
       MOTOTRADE_LLM_MODEL: ${{ secrets.MOTOTRADE_LLM_MODEL || 'claude-haiku-5-5' }}
       MOTOTRADE_SUPABASE_URL: ${{ secrets.MOTOTRADE_SUPABASE_URL }}
       MOTOTRADE_SUPABASE_SERVICE_KEY: ${{ secrets.MOTOTRADE_SUPABASE_SERVICE_KEY }}
-      MOTOTRADE_LOG_LEVEL: INFO
+      MOTOTRADE_SUPABASE_BUCKET: ${{ secrets.MOTOTRADE_SUPABASE_BUCKET || 'fotos' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -39,8 +37,8 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -q -r requirements.txt && pip install -q -e .
-      - name: Migraciones (idempotente)
-        run: alembic upgrade head
+      - name: Esquema al día (no migra; falla si faltan migraciones)
+        run: python -m mototrade.cli db-status
       - name: Una pasada del worker
         run: python -m mototrade.cli worker --once
       - name: Verificar integridad de auditoría

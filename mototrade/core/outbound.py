@@ -89,6 +89,11 @@ def _block(session: Session, row: OutboundAction, reason: str) -> None:
     audit.record(session, action="outbound.blocked", entity_type="outbound_action", entity_id=row.id, details={"reason": reason})
 
 
-def notify_operator(session: Session, text: str, *, key: str) -> OutboundAction:
-    """Atajo: encola una notificación interna (no requiere aprobación; no va a terceros)."""
-    return enqueue(session, kind="notify_operator", channel="telegram", payload={"text": text}, idempotency_key=f"notify:{key}")
+def notify_operator(session: Session, text: str, *, key: str, level: str = "info", category: str = "general",
+                    entity_type: str | None = None, entity_id=None):
+    """Notificación al operador: SIEMPRE al centro de notificaciones de la app; a Telegram solo si está configurado."""
+    from mototrade.core.notifications import notify
+
+    title, _, body = text.partition("\n")
+    return notify(session, key=key, title=title, body=body, level=level, category=category, entity_type=entity_type,
+                  entity_id=entity_id)

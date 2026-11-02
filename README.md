@@ -28,7 +28,7 @@ Docker. 12 módulos sobre una única base de datos.
 | **Control de capital** | ✅ | Capital libre con reservas por compras pendientes, máximo de motos configurable, pausa automática de búsqueda/comprador |
 | **Presupuesto de IA** | ✅ | Registro de uso y costo por llamada, límites mensual/diario, cupos, caché |
 | **Fotos reales** | ✅ | Carga en panel/API/Telegram, recompresión, SHA-256, disco local o Supabase Storage |
-| Telegram | ✅ real con token | Alertas al operador (único canal saliente) |
+| **Notificaciones** | ✅ | Centro de notificaciones persistente en la app (canal principal). Telegram: opcional, solo copia |
 | Seguridad | ✅ | Login Argon2id, roles, API key, kill switch, auditoría encadenada, idempotencia, anti prompt-injection, backups |
 
 Ver `docs/INTEGRACIONES.md` para el detalle de qué es posible, qué requiere permisos y qué no.
@@ -45,7 +45,7 @@ python -m mototrade.cli worker --once   # una pasada del worker
 python -m pytest -q             # tests
 ```
 
-Nube gratuita (Streamlit Cloud + Supabase + GitHub Actions): `docs/NUBE_GRATUITA.md`. VPS con Docker: `docs/DESPLIEGUE.md`. Guía de uso diario: `docs/OPERACION.md`. Arquitectura y
+**Despliegue paso a paso desde GitHub Actions (Supabase + Streamlit Cloud, sin VPS ni Telegram): `docs/DESPLIEGUE_GITHUB.md`.** Restricciones de la nube gratuita: `docs/NUBE_GRATUITA.md`. VPS con Docker: `docs/DESPLIEGUE.md`. Guía de uso diario: `docs/OPERACION.md`. Arquitectura y
 fórmulas: `docs/ARQUITECTURA.md`. Informe de esta entrega: `docs/INFORME_ENTREGA_01.md`.
 
 ## Estructura

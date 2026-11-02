@@ -32,6 +32,18 @@ inject_css()
 def login_view():
     st.title("🏍️ MotoTrade AI")
     st.caption("Acceso privado. Ingresá con tu usuario del panel.")
+    # Primer arranque: si no existe ningún usuario y hay MOTOTRADE_ADMIN_PASSWORD en los secretos, se crea el admin.
+    # La contraseña nunca se muestra ni se registra; el evento queda en la auditoría como "user.created".
+    try:
+        from mototrade.security import ensure_admin_from_settings
+
+        with db() as s:
+            created = ensure_admin_from_settings(s)
+        if created:
+            st.info(f"Usuario administrador inicial '{created.username}' creado a partir de los secretos. Ingresá con esa contraseña.")
+    except Exception as exc:  # p. ej. tablas no creadas todavía
+        st.error("La base de datos no está lista (¿faltan las migraciones?). Ejecutá el workflow 'setup-database' en GitHub Actions.")
+        st.caption(f"Detalle técnico: {type(exc).__name__}")
     with st.form("login"):
         u = st.text_input("Usuario")
         pw = st.text_input("Contraseña", type="password")
@@ -57,6 +69,7 @@ VIEWS = ROOT / "ui" / "views"
 pages = {
     "Operación": [
         st.Page(str(VIEWS / "dashboard.py"), title="Dashboard", icon="📊", default=True),
+        st.Page(str(VIEWS / "notificaciones.py"), title="Notificaciones", icon="🔔"),
         st.Page(str(VIEWS / "centro_control.py"), title="Centro de Control", icon="🎛️"),
         st.Page(str(VIEWS / "aprobaciones.py"), title="Aprobaciones", icon="✅"),
         st.Page(str(VIEWS / "radar.py"), title="Radar de oportunidades", icon="📡"),
@@ -90,7 +103,11 @@ with st.sidebar:
         st.warning("⏸️ Worker pausado")
     else:
         st.success("🟢 Automatizaciones habilitadas")
-    st.markdown(f"**Aprobaciones pendientes:** {n_pending}")
+    with db() as s:
+        from mototrade.core.notifications import unread_count
+
+        n_unread = unread_count(s)
+    st.markdown(f"**Aprobaciones pendientes:** {n_pending} · **🔔 Notificaciones:** {n_unread}")
     from ui.common import gate_snapshot
 
     snap, pos, _ = gate_snapshot()

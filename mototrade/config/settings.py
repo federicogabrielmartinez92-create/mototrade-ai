@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     rules_path: Path = PROJECT_ROOT / "config" / "business_rules.yaml"
 
     secret_key: SecretStr = SecretStr("dev-insecure-change-me")
-    api_key: SecretStr = SecretStr("dev-api-key-change-me")
+    api_key: SecretStr = SecretStr("")  # OPCIONAL: solo para usar la API HTTP con X-API-Key; vacío = deshabilitada
     admin_username: str = "admin"
     admin_password: SecretStr = SecretStr("")
 
@@ -61,6 +61,10 @@ class Settings(BaseSettings):
         return self.env == "production"
 
     @property
+    def api_key_enabled(self) -> bool:
+        return len(self.api_key.get_secret_value()) >= 16
+
+    @property
     def telegram_enabled(self) -> bool:
         return bool(self.telegram_bot_token.get_secret_value()) and bool(self.telegram_chat_id)
 
@@ -79,9 +83,10 @@ class Settings(BaseSettings):
     def integration_status(self) -> dict[str, dict[str, str]]:
         """Estado honesto de cada integración, para mostrar en el panel."""
         return {
+            "notificaciones": {"estado": "centro de notificaciones en la app (siempre activo)", "modo": "real"},
             "telegram": {
-                "estado": "activo" if self.telegram_enabled else "deshabilitado (falta token/chat_id)",
-                "modo": "real" if self.telegram_enabled else "simulado",
+                "estado": "activo (copia de las alertas)" if self.telegram_enabled else "opcional, no configurado",
+                "modo": "real" if self.telegram_enabled else "desactivado",
             },
             "fotos": {
                 "estado": "Supabase Storage" if self.supabase_storage_enabled else f"disco local ({self.photos_dir})",
@@ -89,8 +94,8 @@ class Settings(BaseSettings):
             },
             "telegram_inbox": {
                 "estado": "activo: enviá /moto al bot para cargar anuncios" if self.telegram_enabled else
-                          "deshabilitado (falta token)",
-                "modo": "real" if self.telegram_enabled else "simulado",
+                          "opcional, no configurado (los anuncios se cargan desde la app)",
+                "modo": "real" if self.telegram_enabled else "desactivado",
             },
             "ia_llm": {
                 "estado": "activo" if self.llm_enabled else "proveedor fake (sin API key)",
@@ -121,7 +126,7 @@ class Settings(BaseSettings):
         if self.secret_key.get_secret_value().startswith("dev-insecure"):
             warnings.append("MOTOTRADE_SECRET_KEY usa el valor por defecto inseguro.")
         if self.api_key.get_secret_value().startswith("dev-api-key"):
-            warnings.append("MOTOTRADE_API_KEY usa el valor por defecto inseguro.")
+            warnings.append("MOTOTRADE_API_KEY usa un valor de ejemplo inseguro (dejarla vacía si no se usa la API).")
         if self.database_url.startswith("sqlite") and self.is_production:
             warnings.append("Producción con SQLite: usar PostgreSQL.")
         return warnings

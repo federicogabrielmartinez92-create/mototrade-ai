@@ -121,7 +121,7 @@ class OperationsGate:
             s = get_settings()
             if ks:
                 return FunctionState(name, True, False, "parada de emergencia")
-            return FunctionState(name, True, True, "" if s.telegram_enabled else "modo consola (sin token de Telegram)")
+            return FunctionState(name, True, True, "en la app" + (" + Telegram" if s.telegram_enabled else " (Telegram opcional, no configurado)"))
         raise ValueError(f"función desconocida: {name}")
 
     def allows(self, name: str) -> bool:
