@@ -17,6 +17,10 @@ on:
         description: "Registrar el capital inicial del Centro de Control si el libro de caja está vacío"
         type: boolean
         default: true
+      reset_admin_password:
+        description: "Resetear la contraseña del usuario admin a la del secreto MOTOTRADE_ADMIN_PASSWORD (actualizarlo antes)"
+        type: boolean
+        default: false
 
 concurrency:
   group: mototrade-db
@@ -56,5 +60,10 @@ jobs:
             echo "::error::create_admin=true pero falta el secreto MOTOTRADE_ADMIN_PASSWORD"; exit 1; fi
           if [ "${{ inputs.create_admin }}" != "true" ]; then unset MOTOTRADE_ADMIN_PASSWORD; fi
           if [ "${{ inputs.initial_capital }}" = "true" ]; then python -m mototrade.cli bootstrap; else python -m mototrade.cli bootstrap --no-capital; fi
+      - name: Resetear contraseña del admin (si se pidió)
+        if: ${{ inputs.reset_admin_password }}
+        run: |
+          test -n "$MOTOTRADE_ADMIN_PASSWORD" || { echo "::error::Falta el secreto MOTOTRADE_ADMIN_PASSWORD"; exit 1; }
+          python -m mototrade.cli reset-password "$MOTOTRADE_ADMIN_USERNAME"
       - name: Estado final
         run: python -m mototrade.cli check

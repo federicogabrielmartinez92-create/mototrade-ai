@@ -85,6 +85,19 @@ def authenticate(session: Session, username: str, password: str) -> Principal:
     return Principal(username=user.username, role=user.role, user_id=user.id)
 
 
+def reset_password(session: Session, username: str, new_password: str, *, by: str = "cli") -> User:
+    """Cambia la contraseña de un usuario existente. La contraseña nunca se registra ni se imprime."""
+    username = username.strip().lower()
+    user = session.execute(select(User).where(User.username == username)).scalar_one_or_none()
+    if user is None:
+        raise AuthError(f"No existe el usuario '{username}'.")
+    user.password_hash = hash_password(new_password)
+    user.is_active = True
+    audit.record(session, action="user.password_reset", entity_type="user", entity_id=user.id,
+                 details={"username": username}, actor_type=ActorType.HUMAN, actor_id=by)
+    return user
+
+
 def ensure_admin_from_settings(session: Session) -> User | None:
     """Crea el admin inicial a partir de MOTOTRADE_ADMIN_USERNAME/PASSWORD si no existe ningún usuario."""
     settings = get_settings()

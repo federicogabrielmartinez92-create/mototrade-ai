@@ -5,6 +5,7 @@ from .auth import (
     ensure_admin_from_settings,
     hash_password,
     issue_token,
+    reset_password,
     verify_password,
     verify_token,
 )
@@ -16,6 +17,7 @@ __all__ = [
     "ensure_admin_from_settings",
     "hash_password",
     "issue_token",
+    "reset_password",
     "verify_password",
     "verify_token",
 ]

@@ -84,7 +84,21 @@ def login_view():
                 st.error(str(e))
     for w in settings().security_warnings():
         st.warning(w)
-    st.info("Si todavía no hay usuarios, ejecutá `python -m mototrade.cli bootstrap` con MOTOTRADE_ADMIN_PASSWORD en .env.")
+    try:
+        from sqlalchemy import select
+
+        from mototrade.db.models import User
+
+        with db() as s:
+            has_users = s.execute(select(User.id).limit(1)).scalar_one_or_none() is not None
+    except Exception:
+        has_users = True
+    if not has_users:
+        st.info("Todavía no hay usuarios: ejecutá el workflow 'setup-database' con create_admin=true (o definí "
+                "MOTOTRADE_ADMIN_PASSWORD en los secretos y recargá).")
+    else:
+        st.caption("¿Olvidaste la contraseña? Actualizá el secreto MOTOTRADE_ADMIN_PASSWORD y corré el workflow "
+                   "'setup-database' con reset_admin_password=true.")
 
 
 p = principal()

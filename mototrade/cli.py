@@ -91,6 +91,23 @@ def cmd_db_status(_):
     print("Esquema al día.")
 
 
+def cmd_reset_password(args):
+    """Resetea la contraseña de un usuario tomándola de MOTOTRADE_ADMIN_PASSWORD (secreto). Nunca la imprime."""
+    from mototrade.security import AuthError, reset_password
+
+    pwd = get_settings().admin_password.get_secret_value()
+    if not pwd:
+        print("Falta MOTOTRADE_ADMIN_PASSWORD (la nueva contraseña se toma de ese secreto).")
+        sys.exit(1)
+    try:
+        with session_scope() as s:
+            u = reset_password(s, args.username, pwd, by="cli")
+        print(f"Contraseña de '{u.username}' actualizada.")
+    except AuthError as e:
+        print(str(e))
+        sys.exit(1)
+
+
 def cmd_bootstrap(args):
     """Crea el admin inicial (desde MOTOTRADE_ADMIN_PASSWORD) y el capital inicial. Requiere migraciones aplicadas.
     Idempotente: no toca nada si ya existe. Nunca imprime la contraseña."""
@@ -168,6 +185,7 @@ def main(argv=None):
     sub.add_parser("init-db").set_defaults(fn=cmd_init_db)
     a = sub.add_parser("create-admin"); a.add_argument("username"); a.add_argument("password"); a.set_defaults(fn=cmd_create_admin)
     b = sub.add_parser("bootstrap"); b.add_argument("--no-capital", action="store_true"); b.set_defaults(fn=cmd_bootstrap)
+    rp = sub.add_parser("reset-password"); rp.add_argument("username"); rp.set_defaults(fn=cmd_reset_password)
     sub.add_parser("migrate").set_defaults(fn=cmd_migrate)
     sub.add_parser("db-status").set_defaults(fn=cmd_db_status)
     sub.add_parser("db-check").set_defaults(fn=cmd_db_check)

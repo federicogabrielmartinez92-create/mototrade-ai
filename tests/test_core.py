@@ -121,3 +121,18 @@ def test_auth_roundtrip(session):
 def test_short_password_rejected(session):
     with pytest.raises(AuthError):
         create_user(session, "u", "corta")
+
+
+def test_reset_password(session):
+    from mototrade.security import reset_password
+
+    create_user(session, "admin", "clave-vieja-123", UserRole.ADMIN)
+    reset_password(session, "Admin", "clave-nueva-456", by="cli")
+    session.commit()
+    assert authenticate(session, "admin", "clave-nueva-456").role == "admin"
+    with pytest.raises(AuthError):
+        authenticate(session, "admin", "clave-vieja-123")
+    with pytest.raises(AuthError):
+        reset_password(session, "nadie", "clave-nueva-456")
+    with pytest.raises(AuthError):
+        reset_password(session, "admin", "corta")
