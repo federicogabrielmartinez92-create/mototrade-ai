@@ -1,0 +1,125 @@
+# ==============================================================================
+# MotoTrade AI — REGLAS DE NEGOCIO (fuente única de verdad financiera)
+# ------------------------------------------------------------------------------
+# Este archivo lo edita SOLO el operador humano. Ningún agente de IA tiene
+# permiso de escritura sobre él. Cada tasación y cada decisión del negociador
+# registra el hash (SHA-256) de la versión de reglas que usó, para auditoría.
+#
+# Todos los importes están en ARS sin centavos salvo que se indique. Los
+# porcentajes se expresan como fracción (0.12 = 12 %).
+# ==============================================================================
+version: 1
+currency: ARS
+
+capital:
+  initial_capital: 4000000          # capital disponible al inicio (ARS)
+  max_capital_per_unit_pct: 0.60    # ninguna moto puede concentrar más del 60 % del capital
+  min_cash_reserve_pct: 0.10        # 10 % del capital queda siempre intocable como reserva de caja
+
+valuation:
+  # Comparables
+  min_comparables: 3                # por debajo de esto la confianza es "baja" y se exige revisión humana
+  comparables_max_age_days: 45      # anuncios más viejos no se usan
+  listing_to_sale_discount: 0.06    # SUPUESTO: los precios de publicación cierran ~6 % abajo. Calibrar con ventas reales.
+  # Precios derivados del precio de mercado estimado (P_m)
+  quick_sale_discount: 0.08         # precio de venta rápida  = P_m * (1 - 0.08)
+  publish_markup: 0.04              # precio sugerido de publicación = P_m * (1 + 0.04)
+  deal_basis: quick_sale            # base para el cálculo de compra: quick_sale (conservador) | market
+  # Rentabilidad
+  minimum_roi: 0.12                 # rentabilidad mínima sobre costo total; debajo de esto se bloquea
+  target_roi: 0.18                  # objetivo para priorizar oportunidades
+  # Escenarios adversos
+  downside_scenario_discount: 0.05  # escenario adverso: venta 5 % por debajo de la base
+  severe_scenario_discount: 0.12    # escenario severo: venta 12 % por debajo y costos +25 %
+  severe_scenario_cost_overrun: 0.25
+  # Reserva de imprevistos
+  contingency_reserve_pct: 0.03     # 3 % del precio de compra
+  contingency_reserve_min: 40000    # pero nunca menos de este monto
+  # Redondeo de ofertas
+  offer_rounding: 10000             # las ofertas se redondean hacia abajo a múltiplos de este valor
+
+costs:
+  # Estimaciones por defecto cuando el operador no carga un valor específico.
+  # Son PARÁMETROS, no verificaciones: el panel muestra siempre su origen.
+  # --- Transferencia (DNRPA + sellos Santa Fe). Fuentes y fechas en docs/INTEGRACIONES.md ---
+  # Se calcula sobre el precio de compra como aproximación del "valor de tabla" (verificar tabla vigente).
+  transfer_registral_pct: 0.01      # arancel registral 1 % del valor (Res. 273/2024; Res. 412/2026)
+  transfer_registral_min: 16000     # mínimo 15 MRPA (MRPA ≈ $1.050 al 1/9/2026) -> ACTUALIZAR cuatrimestralmente
+  transfer_sellos_pct: 0.012        # impuesto de sellos Santa Fe 1,2 % (código 14012)
+  transfer_sellos_buyer_share: 0.5  # por ley se paga por mitades; al comprar pagamos la mitad; al vender, la otra
+  transfer_verification_fixed: 25000  # verificación física (F.12) + formulario 08D + gestoría (estimación)
+  transfer_misc_fixed: 15000        # fotocopias, viajes al registro, informe de dominio online
+  # --- Otros ---
+  logistics_default: 25000          # traslado (flete / nafta / tiempo)
+  preparation_default: 30000        # lavado, detailing, service básico
+  marketing_default: 15000          # publicaciones destacadas, fotos, etc.
+
+taxes:
+  # Modelo impositivo SIMPLIFICADO para estimar resultado neto. Lo define el contador; el sistema no asesora.
+  # Con motos usadas de > $716.840 por unidad (tope 2026) el monotributo queda excluido -> Responsable Inscripto.
+  regime: responsable_inscripto     # monotributo | responsable_inscripto
+  iva_margin_pct: 0.21              # IVA aproximado sobre el margen (régimen de bienes usados, art. 18 Ley IVA). 0 si monotributo.
+  iibb_pct: 0.045                   # Ingresos Brutos Santa Fe, alícuota básica (Ley Impositiva art. 6)
+  iibb_min_base_pct_of_sale: 0.10   # base: diferencia compra-venta, nunca menor al 10 % del precio de venta (CF art. 191 inc. j)
+  sales_tax_pct: 0.00               # otros impuestos sobre el precio de venta (si aplicara)
+  notes: "Valores de referencia a 11/2026. Confirmar con el contador antes de operar."
+
+identity:
+  business_name: "MotoTrade Rosario"   # cómo se presenta el agente
+  operator_first_name: "el responsable" # quién confirma los cierres ("lo confirma Juan")
+  disclose_automation: true             # el agente aclara que es un asistente automático
+
+negotiation:
+  buyer:
+    opening_offer_pct_of_max: 0.88  # primera oferta = 88 % del precio máximo autorizado
+    step_pct: 0.03                  # mejora por ronda (sobre el máximo autorizado)
+    max_rounds: 4                   # luego de esto, escalar a humano
+  seller:
+    min_price_pct_of_list: 0.92     # no aceptar menos del 92 % del precio publicado sin aprobación humana
+    step_pct: 0.02                  # concesión por ronda
+    max_rounds: 4
+  daily_message_cap_per_conversation: 6
+  quiet_hours_start: "22:00"        # no se envían mensajes automáticos en este rango (hora Argentina)
+  quiet_hours_end: "08:00"
+
+pricing:
+  # Precios dinámicos de inventario: cuando una moto supera X días en stock se recomienda bajar Y
+  days_in_stock_thresholds: [15, 30, 45]
+  price_cut_steps: [0.02, 0.04, 0.06]
+  min_inquiries_per_week_ok: 2      # con menos consultas semanales se considera "baja demanda"
+  max_total_cut_pct: 0.10           # nunca recomendar bajar más del 10 % acumulado sin aprobación
+
+anomaly:
+  # Detector de anomalías de precio (incremento 2). Ajustes ROBUSTOS sobre comparables equivalentes.
+  km_adjustment_pct_per_10k: 0.02   # cada 10.000 km de diferencia ajusta el comparable ±2 %
+  km_adjustment_cap: 0.15           # ajuste máximo acumulado por km
+  dealer_premium_pct: 0.05          # las concesionarias publican ~5 % más caro que particulares (supuesto)
+  high_km_per_year: 12000           # más de esto por año de antigüedad = "kilometraje elevado"
+  high_dispersion_iqr: 0.25         # IQR/mediana por encima de esto = comparables poco homogéneos
+  stale_listing_days: 60            # anuncio publicado hace más de X días = posible problema o precio duro
+  too_cheap_scam_pct: 0.40          # más de 40 % por debajo de mercado = sospecha fuerte (estafa/daño/error)
+  version_match_bonus: 0.10         # +confianza cuando los comparables son de la misma versión
+
+tradein:
+  tradein_haircut_pct: 0.05         # la moto recibida en parte de pago se toma 5 % debajo de su máximo de compra
+
+radar:
+  opportunity_min_score: 60         # umbral para notificar
+  notify_price_drop_pct: 0.05       # avisar si un anuncio baja más de 5 %
+  watchlist:
+    - {make: Honda,   model: "Wave 110"}
+    - {make: Gilera,  model: "Smash 110"}
+    - {make: Corven,  model: "Energy 110"}
+    - {make: Motomel, model: "Blitz 110"}
+    - {make: Honda,   model: "GLH 150"}
+    - {make: Yamaha,  model: "YBR 125"}
+    - {make: Bajaj,   model: "Rouser NS200"}
+  locations:
+    - "Rosario"
+    - "Funes"
+    - "Roldán"
+    - "Granadero Baigorria"
+    - "Villa Gobernador Gálvez"
+    - "San Lorenzo"
+    - "Pérez"
+    - "Capitán Bermúdez"

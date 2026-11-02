@@ -1,0 +1,10 @@
+# Reverse proxy con HTTPS automático (Let's Encrypt). Instalar Caddy en el VPS y reemplazar el dominio.
+# El panel y la API quedan detrás de TLS; además se recomienda restringir por IP o usar autenticación básica extra.
+
+panel.tu-dominio.com {
+    reverse_proxy 127.0.0.1:8501
+}
+
+api.tu-dominio.com {
+    reverse_proxy 127.0.0.1:8000
+}

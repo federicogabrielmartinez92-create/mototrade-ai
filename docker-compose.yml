@@ -1,0 +1,78 @@
+# MotoTrade AI — despliegue en VPS con Docker Compose
+# Servicios independientes: base (PostgreSQL), api, worker (autónomo), ui (Streamlit), backup.
+# Uso: cp .env.example .env && editar .env && docker compose up -d --build
+name: mototrade
+
+x-app: &app
+  build:
+    context: .
+    dockerfile: docker/Dockerfile
+  env_file: .env
+  environment:
+    MOTOTRADE_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-mototrade}:${POSTGRES_PASSWORD:?definir POSTGRES_PASSWORD en .env}@db:5432/${POSTGRES_DB:-mototrade}
+  volumes:
+    - photos:/app/data/photos
+    - ./config/business_rules.yaml:/app/config/business_rules.yaml:ro
+  depends_on:
+    db:
+      condition: service_healthy
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options: {max-size: "10m", max-file: "5"}
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mototrade}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?definir POSTGRES_PASSWORD en .env}
+      POSTGRES_DB: ${POSTGRES_DB:-mototrade}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mototrade} -d ${POSTGRES_DB:-mototrade}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    # Sin "ports": la base NO se expone a internet.
+
+  api:
+    <<: *app
+    command: ["api"]
+    ports:
+      - "127.0.0.1:8000:8000"   # solo localhost; exponer vía reverse proxy con TLS (Caddy/Nginx)
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  worker:
+    <<: *app
+    command: ["worker"]
+
+  ui:
+    <<: *app
+    command: ["ui"]
+    ports:
+      - "127.0.0.1:8501:8501"   # solo localhost; exponer vía reverse proxy con TLS
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  backup:
+    <<: *app
+    command: ["backup"]
+    volumes:
+      - ./backups:/app/backups
+    environment:
+      MOTOTRADE_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-mototrade}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-mototrade}
+      BACKUP_INTERVAL_SECONDS: 86400
+
+volumes:
+  pgdata:
+  photos:
