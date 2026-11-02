@@ -46,4 +46,6 @@ jobs:
           alembic upgrade head
           python -m mototrade.cli check
       - name: Validar docker-compose
-        run: docker compose config -q
+        env:
+          POSTGRES_PASSWORD: ci-solo-validacion
+        run: cp .env.example .env && docker compose config -q
