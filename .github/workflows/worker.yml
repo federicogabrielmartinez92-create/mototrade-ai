@@ -37,6 +37,8 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -q -r requirements.txt && pip install -q -e .
+      - name: Diagnóstico de conexión (sin credenciales; comparar host/usuario con los secretos de Streamlit)
+        run: python -m mototrade.cli db-check
       - name: Esquema al día (no migra; falla si faltan migraciones)
         run: python -m mototrade.cli db-status
       - name: Una pasada del worker

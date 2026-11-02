@@ -45,6 +45,8 @@ jobs:
           test -n "$MOTOTRADE_DATABASE_URL" || { echo "::error::Falta el secreto MOTOTRADE_DATABASE_URL"; exit 1; }
           test -n "$MOTOTRADE_SECRET_KEY" || { echo "::error::Falta el secreto MOTOTRADE_SECRET_KEY"; exit 1; }
           echo "Secretos presentes."
+      - name: Diagnóstico de conexión (sin credenciales)
+        run: python -m mototrade.cli db-check || true
       - name: Migraciones (alembic upgrade head)
         run: python -m mototrade.cli migrate
       - name: Admin inicial y capital

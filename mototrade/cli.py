@@ -43,24 +43,50 @@ def cmd_migrate(_):
     """Aplica las migraciones Alembic (alembic upgrade head). No inicia tareas comerciales."""
     from alembic import command
 
+    from mototrade.db.diagnostics import diagnose_from_settings
+
     print("Base:", _redact(get_settings().database_url))
+    d = diagnose_from_settings()
+    if d.category not in ("ok", "schema_pending"):
+        print(f"NO SE PUEDE MIGRAR [{d.category}]: {d.message}")
+        for h in d.hints:
+            print(f"  → {h}")
+        sys.exit(1)
     command.upgrade(_alembic_config(), "head")
     cmd_db_status(_)
 
 
+def cmd_db_check(_):
+    """Diagnóstico de conexión clasificado y SEGURO (sin credenciales). Sale con 1 si no está OK."""
+    from mototrade.db.diagnostics import diagnose_from_settings
+
+    d = diagnose_from_settings()
+    print(f"Conexión: {d.url.redacted or '—'}")
+    print(f"Categoría: {d.category}")
+    print(f"Detalle: {d.message}")
+    if d.server_version:
+        print(f"Servidor: {d.server_version}")
+    if d.schema_current or d.schema_head:
+        print(f"Esquema: aplicado={d.schema_current or 'ninguno'} · esperado={d.schema_head}")
+    for h in d.hints:
+        print(f"  → {h}")
+    if not d.ok:
+        sys.exit(1)
+
+
 def cmd_db_status(_):
-    """Compara la revisión aplicada con la última del repo. Sale con 1 si faltan migraciones."""
-    from alembic.runtime.migration import MigrationContext
-    from alembic.script import ScriptDirectory
+    """Compara la revisión aplicada con la última del repo. Sale con 1 si faltan migraciones o no conecta."""
+    from mototrade.db.diagnostics import diagnose_from_settings
 
-    from mototrade.db import get_engine
-
-    head = ScriptDirectory.from_config(_alembic_config()).get_current_head()
-    with get_engine().connect() as conn:
-        current = MigrationContext.configure(conn).get_current_revision()
-    print(f"Migraciones: aplicada={current or 'ninguna'} · última={head}")
-    if current != head:
+    d = diagnose_from_settings()
+    print(f"Migraciones: aplicada={d.schema_current or 'ninguna'} · última={d.schema_head or '?'}")
+    if d.category == "schema_pending":
         print("FALTAN MIGRACIONES: ejecutá 'mototrade migrate' (workflow setup-database).")
+        sys.exit(1)
+    if not d.ok:
+        print(f"NO SE PUDO CONECTAR [{d.category}]: {d.message}")
+        for h in d.hints:
+            print(f"  → {h}")
         sys.exit(1)
     print("Esquema al día.")
 
@@ -144,6 +170,7 @@ def main(argv=None):
     b = sub.add_parser("bootstrap"); b.add_argument("--no-capital", action="store_true"); b.set_defaults(fn=cmd_bootstrap)
     sub.add_parser("migrate").set_defaults(fn=cmd_migrate)
     sub.add_parser("db-status").set_defaults(fn=cmd_db_status)
+    sub.add_parser("db-check").set_defaults(fn=cmd_db_check)
     w = sub.add_parser("worker"); w.add_argument("--once", action="store_true"); w.add_argument("--interval", type=int); w.set_defaults(fn=cmd_worker)
     sub.add_parser("check").set_defaults(fn=cmd_check)
     sub.add_parser("verify-audit").set_defaults(fn=cmd_verify_audit)

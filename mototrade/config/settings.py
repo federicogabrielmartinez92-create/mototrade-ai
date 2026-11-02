@@ -61,6 +61,11 @@ class Settings(BaseSettings):
         return self.env == "production"
 
     @property
+    def database_url_is_default(self) -> bool:
+        """True si nadie definió MOTOTRADE_DATABASE_URL (se usaría el SQLite local por defecto)."""
+        return "database_url" not in self.model_fields_set
+
+    @property
     def api_key_enabled(self) -> bool:
         return len(self.api_key.get_secret_value()) >= 16
 
@@ -127,7 +132,9 @@ class Settings(BaseSettings):
             warnings.append("MOTOTRADE_SECRET_KEY usa el valor por defecto inseguro.")
         if self.api_key.get_secret_value().startswith("dev-api-key"):
             warnings.append("MOTOTRADE_API_KEY usa un valor de ejemplo inseguro (dejarla vacía si no se usa la API).")
-        if self.database_url.startswith("sqlite") and self.is_production:
+        if self.database_url_is_default:
+            warnings.append("MOTOTRADE_DATABASE_URL no definida: se usaría el SQLite local por defecto (solo desarrollo).")
+        elif self.database_url.startswith("sqlite") and self.is_production:
             warnings.append("Producción con SQLite: usar PostgreSQL.")
         return warnings
 

@@ -12,14 +12,9 @@ if str(ROOT) not in sys.path:
 
 # Streamlit Community Cloud: los secretos llegan por st.secrets (TOML). Los volcamos a variables de entorno
 # ANTES de cargar la configuración, así el mismo código corre en Docker/VPS (.env) y en la nube gratuita.
-import os  # noqa: E402
+from mototrade.config.secrets_bridge import apply_streamlit_secrets  # noqa: E402
 
-try:
-    for _k, _v in st.secrets.items():
-        if isinstance(_v, (str, int, float)) and str(_k).startswith("MOTOTRADE_") and _k not in os.environ:
-            os.environ[_k] = str(_v)
-except Exception:  # sin secrets.toml (desarrollo local)
-    pass
+BRIDGE = apply_streamlit_secrets()
 
 from mototrade.core import kill_switch  # noqa: E402
 from mototrade.security import AuthError, authenticate, issue_token  # noqa: E402
@@ -27,6 +22,38 @@ from ui.common import db, inject_css, pending_badge, principal, settings, show_f
 
 st.set_page_config(page_title="MotoTrade AI", page_icon="🏍️", layout="wide", initial_sidebar_state="expanded")
 inject_css()
+
+
+def _show_db_diagnosis(exc: Exception | None = None):
+    """Diagnóstico de conexión seguro: sin contraseñas, tokens ni URL completa. También se registra en los logs."""
+    import logging
+
+    from mototrade.db.diagnostics import diagnose_from_settings
+
+    d = diagnose_from_settings()
+    logging.getLogger("mototrade.ui").warning("diagnóstico de base: %s | %s | %s", d.category, d.message, d.url.redacted)
+    titles = {"missing_url": "No llegó la URL de la base de datos", "url_invalid": "La URL de la base es inválida",
+              "dns": "El host de la base no resuelve (DNS)", "network": "No se puede alcanzar la base (red/puerto/proyecto pausado)",
+              "ssl": "Fallo de TLS/SSL", "tenant": "El pooler de Supabase no reconoce el usuario", "auth": "Contraseña o usuario incorrectos",
+              "database": "La base de datos indicada no existe", "schema_pending": "Conecta, pero faltan migraciones",
+              "ok": "La base responde", "unknown": "Error de base de datos"}
+    st.error(f"🛑 {titles.get(d.category, d.category)}")
+    st.markdown(f"**Categoría:** `{d.category}`  \n**Detalle (redactado):** {d.message}")
+    st.markdown(f"**Conexión configurada:** `{d.url.redacted or '—'}`  \n"
+                f"dialecto `{d.url.dialect or '?'}` · host `{d.url.host or '—'}` · puerto `{d.url.port or '—'}` · "
+                f"usuario `{d.url.username or '—'}` · base `{d.url.database or '—'}`")
+    if d.schema_current or d.schema_head:
+        st.markdown(f"**Esquema:** aplicado `{d.schema_current or 'ninguno'}` · esperado `{d.schema_head}`")
+    for h in d.hints:
+        st.markdown(f"- {h}")
+    with st.expander("Secretos detectados (solo nombres, nunca valores)"):
+        st.write({"cargados desde st.secrets": BRIDGE.loaded, "ya estaban en el entorno": BRIDGE.skipped_existing,
+                  "ignorados": BRIDGE.ignored, "error del puente": BRIDGE.error,
+                  "MOTOTRADE_DATABASE_URL presente": BRIDGE.has_database_url})
+    if exc is not None:
+        from mototrade.db.diagnostics import redact
+
+        st.caption("Excepción original (redactada): " + redact(f"{type(exc).__name__}: {str(exc).splitlines()[0] if str(exc) else ''}")[:200])
 
 
 def login_view():
@@ -41,9 +68,9 @@ def login_view():
             created = ensure_admin_from_settings(s)
         if created:
             st.info(f"Usuario administrador inicial '{created.username}' creado a partir de los secretos. Ingresá con esa contraseña.")
-    except Exception as exc:  # p. ej. tablas no creadas todavía
-        st.error("La base de datos no está lista (¿faltan las migraciones?). Ejecutá el workflow 'setup-database' en GitHub Actions.")
-        st.caption(f"Detalle técnico: {type(exc).__name__}")
+    except Exception as exc:  # p. ej. tablas no creadas todavía o conexión fallida
+        _show_db_diagnosis(exc)
+        st.stop()
     with st.form("login"):
         u = st.text_input("Usuario")
         pw = st.text_input("Contraseña", type="password")

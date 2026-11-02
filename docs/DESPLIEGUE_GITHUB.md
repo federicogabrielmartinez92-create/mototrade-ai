@@ -68,3 +68,20 @@ Tras cambios de esquema en el futuro: primero `setup-database` (con `create_admi
 - `keepalive` (semanal): latido en el repo + backup `pg_dump` como artifact (14 días). Supabase Free no tiene backups.
 - Para ver el estado desde Actions sin tocar nada: `worker` → Run workflow; el paso "Esquema al día" y el `check`
   final muestran todo.
+
+## 6. Si el panel dice que la base no está lista: diagnóstico
+
+La pantalla de login muestra un **diagnóstico clasificado y redactado** (sin contraseñas ni URL completa):
+
+| Categoría | Significado | Qué hacer |
+|---|---|---|
+| `missing_url` | A Streamlit no le llegó `MOTOTRADE_DATABASE_URL` y estaría usando un SQLite local vacío | En App settings → Secrets la clave debe ser exactamente `MOTOTRADE_DATABASE_URL = "postgresql+psycopg://…"` (con comillas, TOML). Guardar y **Reboot app**. El expander "Secretos detectados" lista qué nombres llegaron. |
+| `url_invalid` | La URL no se interpreta | Prefijo `postgresql+psycopg://`, sin comillas extra ni espacios; caracteres especiales de la contraseña codificados |
+| `dns` | El host no existe | Copiar el host del Session pooler desde Supabase |
+| `network` | No responde | Proyecto de Supabase pausado (Resume) o puerto equivocado (usar 5432) |
+| `ssl` | Fallo TLS | Agregar `?sslmode=require` |
+| `tenant` | "Tenant or user not found" | El usuario del pooler es `postgres.<ref>` |
+| `auth` | Contraseña incorrecta | Es la contraseña de la base (Project Settings → Database), no la del login |
+| `schema_pending` | Conecta pero faltan migraciones **o es otra base** | Comparar host/usuario del diagnóstico con el paso "Diagnóstico de conexión" del workflow `worker`/`setup-database`: deben coincidir. Si coinciden, correr `setup-database`. |
+
+La misma clasificación está disponible por CLI (`python -m mototrade.cli db-check`) y como paso en los workflows.
