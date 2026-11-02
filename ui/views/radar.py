@@ -83,8 +83,33 @@ with tab_opp:
     if extra:
         st.error(f"🚨 {len(extra)} oportunidad(es) EXTRAORDINARIA(s): un descuento tan grande también puede ser estafa, daño o error. "
                  "Verificar documentación y mecánica antes de cualquier oferta.")
+    # Anuncios activos que NO generaron oportunidad: mostrar por qué (nunca dejar la pantalla en blanco)
+    with db() as s:
+        radar = RadarService(s, R, CS)
+        active = list(s.execute(select(Listing).where(Listing.status.in_(["new", "watching"]))).scalars())
+        with_deal = {c["listing"] for c in cards}
+        leftovers = []
+        for l in active:
+            if l.id in with_deal:
+                continue
+            ok, why = radar.model_allowed(l.make, l.model)
+            an = radar.analyze_listing(l) if ok else None
+            if not ok:
+                reason = why
+            elif an.classification == "insufficient":
+                n = an.comparables_used
+                reason = (f"tasación insuficiente: {n} comparable(s) de {l.make} {l.model} (año ±1); mínimo {R.valuation.min_comparables}. "
+                          "Cargá más en Tasaciones → Comparables")
+            elif an.mode == "none":
+                reason = f"descuento {pct(an.discount_pct)} ({an.classification}); ni con 25 % de rebaja alcanza el ROI mínimo con estos costos"
+            else:
+                reason = f"puntaje {an.score} por debajo del umbral ({R.radar.opportunity_min_score}); clase {an.classification}"
+            leftovers.append({"anuncio": l.id, "moto": f"{l.make} {l.model} {l.year or ''}", "precio": money(l.asking_price), "motivo": reason})
     if not cards:
-        st.info("No hay oportunidades con esos filtros. Cargá anuncios y comparables, y analizá.")
+        st.info("No hay oportunidades con esos filtros.")
+    if leftovers:
+        st.subheader("Anuncios analizados sin oportunidad")
+        st.dataframe(df(leftovers), width="stretch", hide_index=True)
     for c in cards:
         with st.container(border=True):
             col_img, col_main, col_num = st.columns([1, 2, 2])
