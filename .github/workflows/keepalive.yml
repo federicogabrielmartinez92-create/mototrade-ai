@@ -13,6 +13,8 @@ permissions:
 jobs:
   touch:
     runs-on: ubuntu-latest
+    env:
+      DB: ${{ secrets.MOTOTRADE_DATABASE_URL }}
     steps:
       - uses: actions/checkout@v4
       - name: Registrar latido
@@ -22,14 +24,12 @@ jobs:
           git add .keepalive/last_run.txt && git commit -m "keepalive: latido semanal" || echo "sin cambios"
           git push || true
       - name: Backup semanal de la base (pg_dump → artifact)
-        if: ${{ secrets.MOTOTRADE_DATABASE_URL != '' }}
-        env:
-          DB: ${{ secrets.MOTOTRADE_DATABASE_URL }}
+        if: ${{ env.DB != '' }}
         run: |
           sudo apt-get install -y -q postgresql-client >/dev/null
           pg_dump "${DB/postgresql+psycopg/postgresql}" -Fc -f backup.dump && ls -la backup.dump
       - uses: actions/upload-artifact@v4
-        if: ${{ secrets.MOTOTRADE_DATABASE_URL != '' }}
+        if: ${{ env.DB != '' }}
         with:
           name: mototrade-backup-${{ github.run_id }}
           path: backup.dump
